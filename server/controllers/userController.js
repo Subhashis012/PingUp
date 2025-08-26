@@ -1,6 +1,7 @@
-
 import imagekit from "../configs/imageKit.js";
+import { inngest } from "../inngest/index.js";
 import Connection from "../models/Connections.js";
+import Post from "../models/Post.js";
 import User from "../models/User.js";
 import fs from "fs";
 
@@ -68,7 +69,7 @@ export const updateUserData = async (req, res) => {
       const buffer = fs.readFileSync(cover.path);
       const response = await imagekit.upload({
         file: buffer,
-        fileName: cover.originalname,
+        fileName: profile.originalname,
       });
       const url = imagekit.url({
         path: response.filePath,
@@ -199,10 +200,17 @@ export const sendConnectionRequest = async (req, res) => {
     });
 
     if (!connection) {
-      await Connection.create({
+      const newConnection = await Connection.create({
         from_user_id: userId,
         to_user_id: id,
       });
+      await inngest.send({
+        name: "app/connection-request",
+        data: {
+          connectionId: newConnection._id,
+        },
+      });
+      
       return res.json({
         success: true,
         message: "Connection request sent successfully!",
@@ -256,7 +264,6 @@ export const getUserConnections = async (req, res) => {
   }
 };
 
-
 // Accept Connection Request
 export const acceptConnectionRequest = async (req, res) => {
   try {
@@ -265,24 +272,45 @@ export const acceptConnectionRequest = async (req, res) => {
 
     const connection = await Connection.findOne({
       from_user_id: id,
-      to_user_id: userId})
+      to_user_id: userId,
+    });
 
-      if (!connection) {
-        return res.json({success: false, message: 'Connection not found'})
-      }
+    if (!connection) {
+      return res.json({ success: false, message: "Connection not found" });
+    }
 
-      const user = await User.findById(userId);
-      user.connections.push(id);
-      await user.save();
+    const user = await User.findById(userId);
+    user.connections.push(id);
+    await user.save();
 
-      const toUser = await User.findById(id);
-      toUser.connections.push(userId);
-      await toUser.save();
+    const toUser = await User.findById(id);
+    toUser.connections.push(userId);
+    await toUser.save();
 
-      connection.status = 'accepted';
-      await connection.save();
+    connection.status = "accepted";
+    await connection.save();
 
-      res.json({success: true, message: 'Connection request accepted successfully!'})
+    res.json({
+      success: true,
+      message: "Connection request accepted successfully!",
+    });
+  } catch (error) {
+    console.log(error);
+    return res.json({ success: false, message: error.message });
+  }
+};
+
+// Get User Profiles
+export const getUserProfiles = async (req, res) => {
+  try {
+    const { profileId } = req.body;
+
+    const profile = await User.findById(profileId);
+    if (!profile) {
+      return res.json({ success: false, message: "Profile not found" });
+    }
+    const posts = await Post.find({ user: profileId }).populate("user");
+    res.json({ success: true, profile, posts });
   } catch (error) {
     console.log(error);
     return res.json({ success: false, message: error.message });
