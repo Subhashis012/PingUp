@@ -69,7 +69,7 @@ export const updateUserData = async (req, res) => {
       const buffer = fs.readFileSync(cover.path);
       const response = await imagekit.upload({
         file: buffer,
-        fileName: profile.originalname,
+        fileName: cover.originalname,
       });
       const url = imagekit.url({
         path: response.filePath,
@@ -210,7 +210,7 @@ export const sendConnectionRequest = async (req, res) => {
           connectionId: newConnection._id,
         },
       });
-      
+
       return res.json({
         success: true,
         message: "Connection request sent successfully!",
@@ -236,20 +236,18 @@ export const sendConnectionRequest = async (req, res) => {
 export const getUserConnections = async (req, res) => {
   try {
     const { userId } = req.auth();
-
-    const user = await User.findById(userId).populate(
-      "connections followers following"
-    );
-
+    
+    const user = await User.findById(userId).populate("connections followers following");
+    
     const connections = user.connections;
     const followers = user.followers;
     const following = user.following;
 
     const pendingConnections = (
-      await Connection.find({ to_user_id: userId, status: "pending" })
-    )
-      .populate("from_user_id")
-      .map((connection) => connection.from_user_id);
+      await Connection.find({ to_user_id: userId, status: "pending" }).populate(
+        "from_user_id"
+      )
+    ).map((connection) => connection.from_user_id);
 
     res.json({
       success: true,
